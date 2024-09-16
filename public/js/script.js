@@ -73,7 +73,9 @@ class Viewer {
             .append('svg')
             .attr('width', this._2DContainer.clientWidth)
             .attr('height', this._2DContainer.clientHeight);
-        const g = svg.append('g');
+        const margin = 40;
+        const width = this._2DContainer.clientWidth - 2 * margin;
+        const height = this._2DContainer.clientHeight - 2 * margin;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         polygons.forEach(polygon => {
             if (polygon.points2D) {
@@ -85,19 +87,31 @@ class Viewer {
                 });
             }
         });
-        const margin = 40;
+
         const xScale = d3.scaleLinear()
             .domain([minX, maxX])
-            .range([margin, this._2DContainer.clientWidth - margin]);
+            .range([0, width]);
         
         const yScale = d3.scaleLinear()
             .domain([minY, maxY])
-            .range([this._2DContainer.clientHeight - margin, margin]);
+            .range([height, 0]);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin},${margin})`);
+
+        const clipPath = g.append('clipPath')
+            .attr('id', 'clip')
+            .append('rect')
+            .attr('width', width)
+            .attr('height', height);
+
+        const polygonGroup = g.append('g')
+            .attr('clip-path', 'url(#clip)');
 
         polygons.forEach(polygon => {
             if (polygon.points2D) {
                 const points = polygon.points2D.map(d => [xScale(d.vertex[0]), yScale(d.vertex[1])]);
-                g.append('polygon')
+                polygonGroup.append('polygon')
                     .attr('points', points.map(d => d.join(',')).join(' '))
                     .attr('fill', `#${polygon.color}`) 
                     .attr('stroke', 'black')
@@ -106,26 +120,36 @@ class Viewer {
                     .on('click', (event, d) => this.selectPolygon(d))
                     .on('mouseover', function() { d3.select(this).attr('opacity', 0.7); })
                     .on('mouseout', function() { d3.select(this).attr('opacity', 1); });
-
             }
         });
 
         const xAxis = d3.axisBottom(xScale);
         const yAxis = d3.axisLeft(yScale);
+
         const xAxisG = g.append('g')
             .attr('class', 'x-axis')
-            .attr('transform', `translate(0,${this._2DContainer.clientHeight - margin})`)
+            .attr('transform', `translate(0,${height})`)
             .call(xAxis);
+
         const yAxisG = g.append('g')
             .attr('class', 'y-axis')
-            .attr('transform', `translate(${margin},0)`)
             .call(yAxis);
+
         const zoom = d3.zoom()
             .scaleExtent([0.5, 10])
             .on('zoom', (event) => {
-                g.attr('transform', event.transform);
-                xAxisG.call(xAxis.scale(event.transform.rescaleX(xScale)));
-                yAxisG.call(yAxis.scale(event.transform.rescaleY(yScale)));
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYScale = event.transform.rescaleY(yScale);
+
+                polygonGroup.attr('transform', event.transform);
+
+                xAxisG.call(xAxis.scale(newXScale));
+                yAxisG.call(yAxis.scale(newYScale));
+
+                polygonGroup.selectAll('polygon')
+                    .attr('points', polygon => {
+                        return polygon.points2D.map(d => [newXScale(d.vertex[0]), newYScale(d.vertex[1])].join(',')).join(' ');
+                    });
             });
 
         svg.call(zoom);
@@ -157,7 +181,7 @@ class Viewer {
         this.data.polygonsBySection.forEach(section => {
             section.polygons.forEach(polygon => {
                 polygon.points3D.forEach(point => {
-                    const [x, y, z] = point.vertex;
+                    const [x, z, y] = point.vertex;
                     minX = Math.min(minX, x);
                     minY = Math.min(minY, y);
                     minZ = Math.min(minZ, z);
@@ -173,28 +197,32 @@ class Viewer {
             (minY + maxY) / 2,
             (minZ + maxZ) / 2
         );
-        const size = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+        const size = Math.max(maxX - minX, maxZ - minZ);
         this.camera.position.copy(center);
-        this.camera.position.z += size * 1.5;
+        this.camera.position.y += size * 1.5;
         this.camera.lookAt(center);
         this.controls.target.copy(center);
-        const gridHelper = new THREE.GridHelper(size, 10);
-        gridHelper.position.set(center.x, minY, center.z);
-        this.scene.add(gridHelper);
-        this.addGridLabels(minX, maxX, minY, maxY, minZ, center, size);
+        const sizeX = maxX - minX;
+        const sizeZ = maxZ - minZ;
+        this.createCustomGrid(minX, minZ, sizeX, sizeZ, 10, center, minY);
+        const boxGeometry = new THREE.BoxGeometry(maxX - minX, maxY - minY, maxZ - minZ);
+        const boxMaterial = new THREE.MeshBasicMaterial({color: 0xffff00, wireframe: true});
+        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+        box.position.set(center.x, center.y, center.z);
+        //this.scene.add(box);
         const axesHelper = new THREE.AxesHelper(size / 2);
         axesHelper.position.copy(center);
         //this.scene.add(axesHelper);
-        this.addAxisLabel('X', new THREE.Vector3(center.x + size / 2, minY, center.z), 'red');
-        this.addAxisLabel('Y', new THREE.Vector3(center.x, minY + size / 2, center.z), 'green');
-        this.addAxisLabel('Z', new THREE.Vector3(center.x, minY, center.z + size / 2), 'blue');
+        //this.addAxisLabel('X', new THREE.Vector3(center.x + size / 2, minY, center.z), 'red');
+        //this.addAxisLabel('Y', new THREE.Vector3(center.x, minY, center.z + size / 2), 'green');
+        //this.addAxisLabel('Z', new THREE.Vector3(center.x, center.y + size / 2, center.z), 'blue');
         this.data.polygonsBySection.forEach(section => {
             section.polygons.forEach(polygon => {
                 const geometry = new THREE.BufferGeometry();
                 const vertices = [];
                 const indices = [];
                 polygon.points3D.forEach(point => {
-                    vertices.push(point.vertex[0], point.vertex[1], point.vertex[2]);
+                    vertices.push(point.vertex[0], point.vertex[2], point.vertex[1]);
                 });
                 for (let i = 1; i < polygon.points3D.length - 1; i++) {
                     indices.push(0, i, i + 1);
@@ -239,18 +267,54 @@ class Viewer {
         this.scene.add(sprite);
     }
 
-    addGridLabels(minX, maxX, minY, maxY, minZ, center, size) {
-        const stepX = size / 10;
-        const stepZ = size / 10;
-        for (let i = 0; i <= 10; i++) {
-            const x = minX + i * stepX;
-            const z = minZ + i * stepZ;
-            this.addLabel(x.toFixed(3), new THREE.Vector3(x, minY, minZ), 'blue', 120);
-            this.addLabel(z.toFixed(3), new THREE.Vector3(minX, minY, z), 'blue', 120);
+    createCustomGrid(minX, minZ, sizeX, sizeZ, divisions, center, y) {
+        const stepX = sizeX / divisions;
+        const stepZ = sizeZ / divisions;
+        const halfSizeX = sizeX / 2;
+        const halfSizeZ = sizeZ / 2;
+        const vertices = [];
+        const colors = [];
+        const color1 = new THREE.Color(0x444444);
+        const color2 = new THREE.Color(0x888888);
+        for (let i = 0; i <= divisions; i++) {
+            const x = -halfSizeX + i * stepX;
+            const z = -halfSizeZ + i * stepZ;
+            vertices.push(x, 0, -halfSizeZ, x, 0, halfSizeZ);
+            vertices.push(-halfSizeX, 0, z, halfSizeX, 0, z);
+            const color = i === 0 ? color1 : color2;
+            for (let j = 0; j < 4; j++) {
+                color.toArray(colors, colors.length);
+            }
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        const material = new THREE.LineBasicMaterial({ vertexColors: true, toneMapped: false });
+        const grid = new THREE.LineSegments(geometry, material);
+        grid.position.set(center.x, y, center.z);
+        this.scene.add(grid);
+        for (let i = 0; i <= divisions; i++) {
+            const xValue = minX + i * stepX;
+            const zValue = minZ + i * stepZ;            
+            this.addLabel(xValue, new THREE.Vector3(center.x + i * stepX - halfSizeX, y, center.z - halfSizeZ - 0.5), 'blue', 120);
+            this.addLabel(zValue, new THREE.Vector3(center.x - halfSizeX - 0.5, y, center.z + i * stepZ - halfSizeZ), 'green', 120);
         }
     }
 
-    addLabel(text, position, color, size = 60) {
+    /*addGridLabels(minX, maxX, minY, maxY, minZ, maxZ, center, size) {
+        const stepX = (maxX - minX) / 10;
+        const stepY = (maxY - minY) / 10;
+        const stepZ = size / 10;
+        for (let i = 0; i <= 10; i++) {
+            const x = minX + i * stepX;
+            const y = minY + i * stepY;
+            const z = minZ + i * stepZ;
+            this.addLabel(x.toFixed(3), new THREE.Vector3(x, minY, minZ), 'blue', 120);
+            this.addLabel(y.toFixed(3), new THREE.Vector3(minX, minY, z), 'blue', 120);
+        }
+    }*/
+
+   addLabel(text, position, color, size = 60) {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         context.font = `Bold ${size}px Arial`;
@@ -260,8 +324,6 @@ class Viewer {
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(spriteMaterial);
         sprite.position.copy(position);
-        sprite.translateY(300);
-        sprite.translateZ(-2500);
         sprite.scale.set(size, size, 1);
         this.scene.add(sprite);
     }
@@ -286,3 +348,5 @@ class Viewer {
 
 // Initialize the Viewer class
 const viewer = new Viewer();
+
+
