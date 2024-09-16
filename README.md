@@ -37,56 +37,56 @@ The coordinates for the vertices are stored in a JSON file. The relevant data is
     ]
   }
 }
+```
+### Getting Started
 
-Getting Started
+**Prerequisites**
+- Node.js (v16 or higher)
+- npm (v7 or higher)
 
-***Prerequisites
+**Installation**
 
-Node.js (v16 or higher)
++ Clone the repository:
+git clone https://github.com/ceowapp/rocscience-test1.git
 
-npm (v7 or higher)
++ Install the required dependencies:
 
-***Installation
+    ```npm install```
 
-##Clone the repository:
++ Running the Project
+Start the server:
 
-git clone [<repository-url>](https://github.com/ceowapp/rocscience-test1.git)
-
-##Install the required dependencies:
-
-npm install
-
-***Running the Project
-
-##Start the server:
-
-node server.js
+    ```node server.js```
 
 Open your browser and navigate to:
-
-http://localhost:3000
+```http://localhost:3000```
 
 You should now see the 2D and 3D viewers in your browser.
 
-***Controls
-##2D Viewer
-- Zoom: Scroll in/out to zoom.
-- Pan: Click and drag to pan around the view.
-- Select Polygon: Click on any polygon to select it.
-##3D Viewer
-- Zoom: Scroll in/out to zoom.
-- Rotate: Click and drag to rotate the 3D view.
-- Pan: Right-click and drag to pan across the view.
+**Controls**
 
-***Screenshots
++ 2D Viewer
+1. Zoom: Scroll in/out to zoom.
+2. Pan: Click and drag to pan around the view.
+3. Select Polygon: Click on any polygon to select it.
++ 3D Viewer
+1. Zoom: Scroll in/out to zoom.
+2. Rotate: Click and drag to rotate the 3D view.
+3. Pan: Right-click and drag to pan across the view.
+
+**Screenshots**
+
 2D Viewer
 <Image goes here>
 
 3D Viewer
 <Image goes here>
 
-Contributing
+**Contributing**
+
 If you'd like to contribute to this project, feel free to submit a pull request. For major changes, please open an issue first to discuss what you would like to change.
 
-License
+**License**
+
 This project is licensed under the MIT License - see the LICENSE file for details.
+
